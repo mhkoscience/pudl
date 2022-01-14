@@ -22,7 +22,7 @@ Lukáš Tomaník and Michal H. Kolář as principle investigators.
 
 # Contributions (alphabetical)
 
-* Michaela Černeková -- curation of the metadata
-* Michal H. Kolář -- supervision, code, design
-* Lukáš Tomaník -- supervision, curation of the metadata
-* Dalibor Trapl -- code
+* Michaela Černeková - curation of the metadata
+* Michal H. Kolář - supervision, code, design
+* Lukáš Tomaník - supervision, curation of the metadata
+* Dalibor Trapl - code
