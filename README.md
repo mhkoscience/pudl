@@ -12,5 +12,17 @@ This repository contains the website code.
 # Files
 
 * data.csv - metadata about videos
-* index.html - website including CSS styles
+* index.html - website including CSS
 * script.js - search engine. Requires [papaparse](https://www.papaparse.com/) and [jquery](https://jquery.com/).
+
+# Acknowledgement
+
+The engine was created as a part of two projects of Internal grant agency of UCT Prague, with 
+Lukáš Tomaník and Michal H. Kolář as principle investigators.
+
+# Contributions (alphabetical)
+
+* Michaela Černeková -- curation of the metadata
+* Michal H. Kolář -- supervision, code, design
+* Lukáš Tomaník -- supervision, curation of the metadata
+* Dalibor Trapl -- code
