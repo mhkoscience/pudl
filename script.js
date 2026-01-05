@@ -1,13 +1,14 @@
 let data;
 
-const allStrings = new Array; 
-const searchStrings = new Array;
-const subjects = new Array;
+const allStrings = []; 
+let searchStrings = [];
+const subjects = [];
 
-let labels = new Array;
+let labels = [];
 let filteredVideos;
 
 const searchResults = document.getElementById('searchResults');
+const resultsCountElement = document.getElementById("resultsCount");
 const autocomplete = document.querySelector('.suggestions');
 
 // Parsing data from csv file
@@ -58,7 +59,7 @@ promise = Papa.parse('data.csv', {
     $("#subjectList li").each(function () {
         var subjectLi = $(this);
         subjectLi.click(function () {
-            console.log(subjectLi.text());
+//            console.log(subjectLi.text());
             clearLabels();
             addLabelSubject(subjectLi.text());
             $("#subjects").toggle(200);
@@ -69,67 +70,113 @@ promise = Papa.parse('data.csv', {
 });
 
 
+const normalizeText = (text) => {
+  if(!text || text === "")
+    return "";
 
+  return text.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+};
 
-const searchBar = document.getElementById('searchBar');
+const videoMatchesSearch = (video, query) => {
+  const queryNormalized = normalizeText(query);
+  return (
+      normalizeText(video.odkaz).includes(queryNormalized) ||
+      normalizeText(video.nazev).includes(queryNormalized) ||
+      normalizeText(video.vyucujici).includes(queryNormalized) ||
+      normalizeText(video.predmet).includes(queryNormalized) ||
+      normalizeText(video.keywords).includes(queryNormalized) ||
+      normalizeText(video.typ).includes(queryNormalized) ||
+      normalizeText(video.kod).includes(queryNormalized)
+  );
+};
 
-searchBar.addEventListener('keyup', (e) => {
-  const searchString = e.target.value.toLowerCase();
+function refreshVideoList() {
+  let filteredVideos = data;
+  const queriesList = [...labels, ...searchStrings];
 
-  searchStrings.push(searchString);
-
-  searchStrings.forEach(searchString => {
-    filteredVideos = data.filter((video) => {
-      return (
-        video.odkaz.toLowerCase().includes(searchString) ||
-        video.nazev.toLowerCase().includes(searchString) ||
-        video.vyucujici.toLowerCase().includes(searchString) ||
-        video.predmet.toLowerCase().includes(searchString) ||
-        video.keywords.toLowerCase().includes(searchString) ||
-        video.typ.toLowerCase().includes(searchString) ||
-        video.kod.toLowerCase().includes(searchString)
-      );
+  if (queriesList.length > 0) {
+    queriesList.forEach(label => {
+      filteredVideos = filteredVideos.filter(video => videoMatchesSearch(video, label));
     });
-  });
-  
-  showVideos(filteredVideos);
-  
+
+    showVideos(filteredVideos);
+
+  }
+  else {
+    showVideos([]);
+  }
+}
+
+function refreshAutocomplete() {
   autocomplete.innerHTML = '';
-  const filteredStrings = allStrings.filter((s) => {
-    // remove accents
-    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(searchString.normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
-  });
-  
-  var numberSuggestions = 5;
+
+  let filteredStrings = allStrings;
+  searchStrings.forEach(searchString => {
+    filteredStrings = filteredStrings.filter(dataItem => normalizeText(dataItem).includes(searchString))
+  })
+
+  const numberSuggestions = 5;
   filteredStrings.slice(0, numberSuggestions).forEach(function(suggested) {
     if (!(labels.includes(suggested))) {
       const div = document.createElement('div');
       div.classList.add('navrh');
       div.innerHTML = suggested;
       autocomplete.appendChild(div);
-    };
+    }
   });
-  
+
   const suggestions = document.getElementsByClassName('navrh');
-  
+
   for (let i = 0; i < suggestions.length; i++) {
     autocomplete.id = 'full';
     suggestions[i].addEventListener('click', addLabel);
-  };
+  }
+
+  if (filteredStrings.length === 0){
+    autocomplete.id = "empty";
+  }
   
-  if (searchString  === '') {
+  if(searchStrings.length === 0) {
     autocomplete.innerHTML = '';
-    autocomplete.id = 'empty';
-    searchResults.innerHTML = '';
-  };
+    autocomplete.id = "empty";
+  }
+}
+
+
+const searchBar = document.getElementById('searchBar');
+let debounceTimer;
+
+searchBar.addEventListener('keyup', (e) => {
+  if (debounceTimer)
+    clearTimeout(debounceTimer);
+
+
+  // wait 100 ms before refreshing autocomplete and videos
+  debounceTimer = setTimeout(() => {
+    const searchString = e.target.value.toLowerCase();
+
+    // I don't understand how searchStrings should work, but they are unnecesary in current form
+    // therefore they are being set to include just one item - search query
+    // searchStrings = searchString.split(/[,]+/).filter(item => item.length > 0).map(item => normalizeText(item));
+    searchStrings = [normalizeText(searchString)].filter(item => item.length > 0);
+
+    refreshAutocomplete();
+    refreshVideoList();
+
+    // if search is empty, hide videos and results count
+    if (searchStrings.length === 0 && labels.length === 0) {
+      searchResults.innerHTML = '';
+      refreshResultsCount(0);
+    }
+  }, 100);
 });
 
 
 const showVideos = (data) => {
-  const htmlString = data
-    .map((video) => {
-      const keywordsSeparated = video.keywords.replaceAll(",",", ");
-      return `
+  searchResults.innerHTML = data
+      .map((video) => {
+        const keywordsSeparated = video.keywords.replaceAll(",", ", ");
+        return `
       <li class="videoResult" onclick="window.open('${video.odkaz}')">
                 <div class="subjectAndTeacher">
                   <h2>${video.nazev}</h2>
@@ -143,108 +190,76 @@ const showVideos = (data) => {
                 </div>
       </li>
     `;
-    })
-    .join('');
-    searchResults.innerHTML = htmlString;
-    showResultsCount(data.length);
+      })
+      .join('');
+  refreshResultsCount(data.length);
 };
 
 
-function showResultsCount (resultsCount) {
-    $("#resultsCount").empty();
-    $("#resultsCount").append("<p>vypudlováno " + resultsCount + " videí</p>");
-};
+function refreshResultsCount(resultsCount, removeElementContent) {
+  if(!removeElementContent)
+    removeElementContent = (searchStrings.length === 0) && (labels.length === 0);
 
+  if (resultsCount === 0 && removeElementContent){
+    resultsCountElement.innerHTML = "";
+    return;
+  }
 
-function addLabel () {
-  const suggestion = this.innerHTML;
-  searchStrings.push(suggestion);
+  resultsCountElement.innerHTML = "<p>vypudlováno " + resultsCount + " videí</p>";
+}
+
+function clearSearch(div) {
+  div.getElementsByClassName("closing")[0].addEventListener("click", deleteLabel);
+  const stitky = document.getElementById("labels");
+  stitky.appendChild(div);
+  autocomplete.innerHTML = "";
+  autocomplete.id = "empty";
+  document.getElementById("searchBar").value = "";
+  searchStrings = [];
+}
+
+function addLabelElement(suggestion) {
+  labels.push(suggestion);
   const div = document.createElement("div");
   div.classList.add("label");
   div.innerHTML = `
   <p>${suggestion}</p>
   <p class="closing">x</p>
   `;
-  div.getElementsByClassName("closing")[0].addEventListener("click", deleteLabel);
-  const stitky = document.getElementById("labels");
-  stitky.appendChild(div);
-  autocomplete.innerHTML = "";
-  autocomplete.id = "empty";
-  document.getElementById("searchBar").value = "";
-  labels.push(suggestion);
-  labels.forEach((label) => {
-    filteredVideos = filteredVideos.filter(function(video) {
-      return (
-        video.odkaz.toLowerCase().includes(label) ||
-        video.nazev.toLowerCase().includes(label) ||
-        video.vyucujici.toLowerCase().includes(label) ||
-        video.predmet.toLowerCase().includes(label) ||
-        video.tyden.toString().toLowerCase().includes(label) ||
-        video.keywords.toLowerCase().includes(label) ||
-        video.typ.toLowerCase().includes(label) ||
-        video.kod.toLowerCase().includes(label)
-       )
-    })
-  });
-  showVideos(filteredVideos);
-};
+
+  clearSearch(div);
+}
+
+
+function addLabel () {
+  const suggestion = this.innerHTML;
+  addLabelElement(suggestion);
+  refreshVideoList();
+}
 
 
 function addLabelSubject (suggestion) {
-  searchStrings.push(suggestion);
-  const div = document.createElement("div");
-  div.classList.add("label");
-  div.innerHTML = `
-  <p>${suggestion}</p>
-  <p class='closing'>x</p>
-  `;
-  div.getElementsByClassName("closing")[0].addEventListener("click", deleteLabel);
-  const stitky = document.getElementById("labels");
-  stitky.appendChild(div);
-  autocomplete.innerHTML = "";
-  autocomplete.id = "empty";
-  document.getElementById("searchBar").value = "";
-  labels.push(suggestion);
-  console.log("suggestion " + labels);
-  filteredVideos = data.filter(function(video) {
-    return (
-      video.predmet == suggestion
-     );
-  });
-  showVideos(filteredVideos);
-};
+  addLabelElement(suggestion);
+
+  refreshVideoList()
+}
 
 function deleteLabel () {
-  suggestion = $(this).parent().children()[0].innerHTML;
-  console.log(suggestion);
-  labels = labels.filter(function(value, index, arr){ 
-    return value != suggestion;
+  const suggestion = $(this).parent().children()[0].innerHTML;
+
+  labels = labels.filter(value => {
+    return value !== suggestion;
   });
   
   $(this).parent().remove();
 
-  if (labels.length == 0) {
+  if (labels.length === 0) {
     $(".videoResult").remove();
-    $("#resultsCount").empty();
-  } else {
-    // update list of videos shown
-    labels.forEach((label) => {
-      filteredVideos = data.filter(function(video) {
-        return (
-          video.odkaz.toLowerCase().includes(label) ||
-          video.nazev.toLowerCase().includes(label) ||
-          video.vyucujici.toLowerCase().includes(label) ||
-          video.predmet.toLowerCase().includes(label) ||
-          video.tyden.toString().toLowerCase().includes(label) ||
-          video.keywords.toLowerCase().includes(label) ||
-          video.typ.toLowerCase().includes(label) ||
-          video.kod.toLowerCase().includes(label)
-         )
-      })
-    });
-    showVideos(filteredVideos);
-  };
-};
+    refreshResultsCount(0);
+  }
+
+  refreshVideoList();
+}
 
 
 function clearLabels() {
@@ -252,8 +267,9 @@ function clearLabels() {
         $(this).remove();
     });
     labels = [];
-    $("#resultsCount").empty();
-};
+    refreshResultsCount(0);
+    refreshVideoList();
+}
 
 
 $(document).ready( function() {
